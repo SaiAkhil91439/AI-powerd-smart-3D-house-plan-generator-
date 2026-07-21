@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 3D House Plan Generator & Multi-Floor Suite</title>
+  <meta name="description" content="Multi-floor algorithmic 2D/3D house plan generator with BSP partitioning, genetic optimization, Vastu rules, 3D furniture, floating 3D labels, and cost estimator.">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Top Header -->
+    <header>
+      <div class="logo-container">
+        <div class="logo-icon">3D</div>
+        <div class="logo-text">PlanSynth AI</div>
+        <span class="logo-badge">Multi-Floor G+3 Suite</span>
+      </div>
+      <div class="header-controls">
+        <button id="btn-open-vastu" class="btn-secondary">🧭 Vastu Inspector</button>
+        <button id="btn-open-cost" class="btn-secondary">💰 Cost Estimator</button>
+        <button id="btn-generate-top" class="btn-primary" style="padding: 8px 16px; font-size: 13px; width: auto;">
+          ⚡ Generate 3+ Plans
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main>
+      <!-- Sidebar Control Panel -->
+      <aside class="sidebar">
+        <!-- 1. Plot Dimensions & Setbacks -->
+        <div class="section-card">
+          <div class="section-title">
+            <span>1. Plot & Setbacks (ft)</span>
+            <span>📐</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="plot-length">Length (N-S)</label>
+              <input type="number" id="plot-length" value="40" min="20" max="150" step="1">
+            </div>
+            <div class="form-group">
+              <label for="plot-width">Breadth (E-W)</label>
+              <input type="number" id="plot-width" value="30" min="20" max="150" step="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="setback-front">Front Setback</label>
+              <input type="number" id="setback-front" value="5" min="0" max="20">
+            </div>
+            <div class="form-group">
+              <label for="setback-sides">Side & Rear</label>
+              <input type="number" id="setback-sides" value="3" min="0" max="15">
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Floors & House Type -->
+        <div class="section-card">
+          <div class="section-title">
+            <span>2. Floors & Architecture</span>
+            <span>🏢</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="num-floors">Number of Floors</label>
+              <select id="num-floors">
+                <option value="1">1 Floor (Ground Only)</option>
+                <option value="2" selected>2 Floors (Ground + 1st)</option>
+                <option value="3">3 Floors (G + 2 Floors)</option>
+                <option value="4">4 Floors (G + 3 Floors)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="house-type">House Type</label>
+              <select id="house-type">
+                <option value="duplex" selected>Duplex House</option>
+                <option value="normal">Normal Independent</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Room Requirements -->
+        <div class="section-card">
+          <div class="section-title">
+            <span>3. Room Requirements</span>
+            <span>🏠</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="master-beds">Master Beds</label>
+              <input type="number" id="master-beds" value="1" min="1" max="3">
+            </div>
+            <div class="form-group">
+              <label for="regular-beds">Bedrooms</label>
+              <input type="number" id="regular-beds" value="2" min="0" max="6">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="baths-count">Bathrooms</label>
+              <input type="number" id="baths-count" value="2" min="1" max="6">
+            </div>
+            <div class="form-group">
+              <label for="has-parking">Car Parking</label>
+              <select id="has-parking">
+                <option value="yes">Yes (Reserved)</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Vastu & Orientation -->
+        <div class="section-card">
+          <div class="section-title">
+            <span>4. Vastu & Orientation</span>
+            <span>🧭</span>
+          </div>
+          <div class="form-group">
+            <label for="north-orientation">Entrance Facing</label>
+            <select id="north-orientation">
+              <option value="N">North (N)</option>
+              <option value="E">East (E)</option>
+              <option value="NE" selected>North-East (NE)</option>
+              <option value="S">South (S)</option>
+              <option value="W">West (W)</option>
+            </select>
+          </div>
+          <label class="toggle-switch" style="margin-top: 10px;">
+            <span>Enforce Vastu Rules</span>
+            <input type="checkbox" id="vastu-toggle" checked style="display:none;">
+            <div class="toggle-checkbox"></div>
+          </label>
+        </div>
+
+        <!-- 5. Priorities -->
+        <div class="section-card">
+          <div class="section-title">
+            <span>5. Priorities</span>
+            <span>🎯</span>
+          </div>
+          <div class="form-group slider-container">
+            <div class="slider-header">
+              <label>Space Efficiency</label>
+              <span id="val-weight-space" class="slider-val">40%</span>
+            </div>
+            <input type="range" id="weight-space" min="0" max="100" value="40">
+          </div>
+          <div class="form-group slider-container">
+            <div class="slider-header">
+              <label>Natural Light / Vent</label>
+              <span id="val-weight-light" class="slider-val">30%</span>
+            </div>
+            <input type="range" id="weight-light" min="0" max="100" value="30">
+          </div>
+          <div class="form-group slider-container">
+            <div class="slider-header">
+              <label>Vastu Alignment</label>
+              <span id="val-weight-vastu" class="slider-val">30%</span>
+            </div>
+            <input type="range" id="weight-vastu" min="0" max="100" value="30">
+          </div>
+        </div>
+
+        <button id="btn-generate-main" class="btn-primary">
+          ✨ Generate Multi-Floor Plans
+        </button>
+      </aside>
+
+      <!-- Workspace Area -->
+      <section class="workspace">
+        <div class="candidate-tabs">
+          <button class="tab-btn active" data-index="0">
+            <span>Option A: Max Light</span>
+            <span class="tab-score" id="score-opt-0">94 pts</span>
+          </button>
+          <button class="tab-btn" data-index="1">
+            <span>Option B: Space Optimized</span>
+            <span class="tab-score" id="score-opt-1">89 pts</span>
+          </button>
+          <button class="tab-btn" data-index="2">
+            <span>Option C: High Vastu</span>
+            <span class="tab-score" id="score-opt-2">87 pts</span>
+          </button>
+
+          <!-- Floor Switcher -->
+          <div class="floor-switcher" id="floor-switcher-bar">
+            <button class="floor-btn active" data-floor="0">Ground Floor</button>
+            <button class="floor-btn" data-floor="1">1st Floor</button>
+          </div>
+
+          <div class="view-mode-toggle">
+            <button id="view-2d-btn" class="view-btn active">2D Floor Plan</button>
+            <button id="view-3d-btn" class="view-btn">3D Viewport</button>
+          </div>
+        </div>
+
+        <div class="viewport-container">
+          <div class="editor-toolbar">
+            <button id="tool-drag" class="tool-btn active"><span>✋ Drag Wall</span></button>
+            <button id="tool-swap" class="tool-btn"><span>🔄 Swap Rooms</span></button>
+            <button id="tool-reset" class="tool-btn"><span>↺ Reset</span></button>
+          </div>
+
+          <div class="compass-widget">N</div>
+
+          <canvas id="editor-canvas" width="900" height="600"></canvas>
+          <div id="three-viewport"></div>
+        </div>
+
+        <div class="bottom-bar">
+          <div class="health-metrics">
+            <div class="metric-item">
+              <span class="metric-label">Fitness Score:</span>
+              <span id="metric-fitness" class="metric-value">94/100</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Total Built-up:</span>
+              <span id="metric-area" class="metric-value">2,160 sq.ft</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Vastu Score:</span>
+              <span id="metric-vastu" class="metric-value">92%</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Status:</span>
+              <span id="metric-status" class="metric-value" style="color: #10b981;">✓ Valid Layout</span>
+            </div>
+          </div>
+
+          <div class="action-buttons">
+            <button id="btn-export-pdf" class="btn-secondary">📄 Export PDF Blueprint</button>
+            <button id="btn-export-dxf" class="btn-secondary">📐 Export DXF CAD</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Material Cost Estimator -->
+  <div id="modal-cost" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>💰 Material Quantity & Construction Budget</h2>
+        <button class="modal-close" onclick="document.getElementById('modal-cost').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body" id="modal-cost-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Vastu Detailed Inspection -->
+  <div id="modal-vastu" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>🧭 Vastu Shastra Directional Inspection</h2>
+        <button class="modal-close" onclick="document.getElementById('modal-vastu').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body" id="modal-vastu-body"></div>
+    </div>
+  </div>
+
+  <script src="js/bsp.js"></script>
+  <script src="js/constraints.js"></script>
+  <script src="js/genetic.js"></script>
+  <script src="js/cost.js"></script>
+  <script src="js/vastu.js"></script>
+  <script src="js/editor2d.js"></script>
+  <script src="js/viewer3d.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
